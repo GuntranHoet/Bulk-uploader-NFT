@@ -92,27 +92,25 @@ def fillMetadata(d: webdriver.Chrome, metadataMap: dict):
             is_number = False
             entries = len(key)
 
-            # skip if LEVEL but has more than 2 entries (probably a number)
-            if trait_class_index == 2 and entries != 2:
-                continue
-
-            # skip if NUMERICAL has not 3 entries, these only need 3 at least
-            if trait_class_index == 3 and entries != 3:
-                continue
-
             if "display_type" in key:
                 display_type = str(key["display_type"])
+            # LEVEL traits shouldn't have display types
+            if trait_class_index == 2 and (display_type != None):
+                continue
+            # NUMERICAL traits should have display types
+            if trait_class_index == 3 and (display_type == None):
+                continue
+
             if "trait_type" in key:
                 trait_type = str(key["trait_type"])
+
             if "value" in key:
                 value = str(key["value"])
                 is_number = checkInt(value)
             else:
                 print("<!> Trait without value:", trait_type)
                 continue
-
             if is_number:
-                max = value
                 # skip if it's a number, trait properties don't deal with numbers
                 if trait_class_index == 1:
                     continue
@@ -121,11 +119,15 @@ def fillMetadata(d: webdriver.Chrome, metadataMap: dict):
                 if trait_class_index > 1:
                     continue
 
+            if "max" in key:
+                if checkInt(key["max"]):
+                    max = int( key["max"] )
+                else:
+                    continue # skip if there is a max, but it's not a number
+
             # custom max values
-            if trait_type.lower() == "rank":
-                max = str( 5 )
-            elif trait_type.lower() == "rating":
-                max = str( 2000 )
+            if max == None:
+                max = str( value )
 
             # get & set the input fields
             input3 = None
