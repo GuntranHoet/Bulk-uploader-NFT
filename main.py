@@ -1,22 +1,29 @@
 import os
+import time
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from decouple import config
-
-import time
 
 from CSV import CSV
 from JSON import JSON
 from NFT import NFT
 
 EXTENSION_PATH = config("EXTENSION_PATH")
-
 RECOVERY_CODE = config("RECOVERY_CODE")
-
 PASSWORD = config("PASSWORD")
-
 CHROME_DRIVER_PATH = config("CHROME_DRIVER_PATH")
+
+COLLECTION_NAME = config("COLLECTION_NAME")
+CREATE_URL = "https://opensea.io/collection/" + COLLECTION_NAME + "/assets/create"
+
+def checkInt(str):
+    try:
+        int(str)
+        return True
+    except ValueError:
+        return False
 
 def setup_metamask_wallet(d):
     d.switch_to.window(d.window_handles[0])  # focus on metamask tab
@@ -42,38 +49,281 @@ def setup_metamask_wallet(d):
 
 
 def move_to_opensea(d):
-    d.execute_script('''window.open("https://opensea.io/collection/guy-with-a-smirk/assets/create","_blank")''')
+    d.execute_script("window.open(\"" + CREATE_URL + "\",\"_blank\")")
     d.switch_to.window(d.window_handles[2])
     time.sleep(3)
 
 
 def signin_to_opensea(d):
+    time.sleep(4)
     d.find_element_by_xpath('//span[text()="MetaMask"]').click()
+    time.sleep(4)
+    d.switch_to.window(d.window_handles[2])
     time.sleep(2)
-    d.switch_to.window(d.window_handles[3])
+    d.find_element_by_xpath('//span[text()="MetaMask"]').click()
+    time.sleep(4)
+    d.switch_to.window(d.window_handles[4])
+    time.sleep(2)
     d.find_element_by_xpath('//button[text()="Next"]').click()
-    time.sleep(2)
-    d.find_element_by_xpath('//button[text()="Connect"]').click()
-
-
-def fillMetadata(d, metadataMap: dict):
-    d.find_element_by_xpath('//div[@class="AssetFormTraitSection--side"]/button').click()
-    for key in metadataMap:
-        input1 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[1]/div/div/input')
-        input2 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[2]/div/div/input')
-
-        input1.send_keys(str(key))
-        input2.send_keys(str(metadataMap[key]))
-        d.find_element_by_xpath('//button[text()="Add more"]').click()
-
     time.sleep(1)
-    d.find_element_by_xpath('//button[text()="Save"]').click()
+    d.find_element_by_xpath('//button[text()="Connect"]').click()
+    time.sleep(2)
+    d.find_element_by_xpath('//button[text()="Sign"]').click()
+
+
+def fillMetadata(d: webdriver.Chrome, metadataMap: dict):
+
+    # PROPERTIES
+    trait_classes = [
+        d.find_element_by_xpath('//div[@class="AssetFormTraitSection--side"]/button'),
+        d.find_element_by_xpath('(//div[@class="AssetFormTraitSection--side"])[2]/button'),
+        d.find_element_by_xpath('(//div[@class="AssetFormTraitSection--side"])[3]/button')    
+    ]
+    trait_class_index = 1
+
+    for trait_class in trait_classes:
+        trait_class.send_keys(Keys.ENTER)
+
+        for key in metadataMap:
+            display_type = None
+            trait_type = "Property"
+            value = None
+            max = None
+            is_number = False
+            entries = len(key)
+
+            # skip if LEVEL but has more than 2 entries (probably a number)
+            if trait_class_index == 2 and entries != 2:
+                continue
+
+            # skip if NUMERICAL has not 3 entries, these only need 3 at least
+            if trait_class_index == 3 and entries != 3:
+                continue
+
+            if "display_type" in key:
+                display_type = str(key["display_type"])
+            if "trait_type" in key:
+                trait_type = str(key["trait_type"])
+            if "value" in key:
+                value = str(key["value"])
+                is_number = checkInt(value)
+            else:
+                print("<!> Trait without value:", trait_type)
+                continue
+
+            if is_number:
+                max = value
+                # skip if it's a number, trait properties don't deal with numbers
+                if trait_class_index == 1:
+                    continue
+            else:
+                # levels or numericals NEED a number to continue
+                if trait_class_index > 1:
+                    continue
+
+            # custom max values
+            if trait_type.lower() == "rank":
+                max = str( 5 )
+            elif trait_type.lower() == "rating":
+                max = str( 2000 )
+
+            # get & set the input fields
+            input3 = None
+            if is_number:
+                input3 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[3]/div/div/input')
+                input3.send_keys(Keys.CONTROL,"a")
+                input3.send_keys(max)
+
+            input2 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[2]/div/div/input')
+            input2.send_keys(Keys.CONTROL,"a")
+            input2.send_keys(value)
+
+            input1 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[1]/div/div/input')
+            input1.send_keys(Keys.CONTROL,"a")
+            input1.send_keys(trait_type)
+
+            d.find_element_by_xpath('//button[text()="Add more"]').send_keys(Keys.ENTER)
+
+        time.sleep(1)
+        d.find_element_by_xpath('//button[text()="Save"]').send_keys(Keys.ENTER)
+        time.sleep(1)
+        trait_class_index += 1
+
+
+
+
+    # d.find_element_by_xpath('//div[@class="AssetFormTraitSection--side"]/button').send_keys(Keys.ENTER)
+    # for key in metadataMap:
+    #     input1 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[1]/div/div/input')
+    #     input2 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[2]/div/div/input')
+
+    #     datalen = len(key)
+    #     if datalen > 2:
+    #         continue
+
+    #     trait_type = None
+    #     value = None
+
+    #     if "trait_type" in key:
+    #         trait_type = str(key["trait_type"])
+    #     if "value" in key:
+    #         value = str(key["value"])
+    #         if checkInt(value): # num values - without display_type - should be added as levels
+    #             continue
+    #     else:
+    #         continue
+
+    #     input1.send_keys(Keys.CONTROL, "a")
+    #     if datalen == 1:
+    #         input1.send_keys("Property")
+    #     else:
+    #         input1.send_keys(trait_type)
+    #     input2.send_keys(Keys.CONTROL, "a")
+    #     input2.send_keys(value)
+    #     d.find_element_by_xpath('//button[text()="Add more"]').send_keys(Keys.ENTER)
+
+    # time.sleep(1)
+    # d.find_element_by_xpath('//button[text()="Save"]').send_keys(Keys.ENTER)
+    # time.sleep(1)
+
+
+
+
+    # # PROPERTIES
+    # d.find_element_by_xpath('//div[@class="AssetFormTraitSection--side"]/button').send_keys(Keys.ENTER)
+    # for key in metadataMap:
+    #     input1 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[1]/div/div/input')
+    #     input2 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[2]/div/div/input')
+
+    #     datalen = len(key)
+    #     if datalen > 2:
+    #         continue
+
+    #     trait_type = None
+    #     value = None
+
+    #     if "trait_type" in key:
+    #         trait_type = str(key["trait_type"])
+    #     if "value" in key:
+    #         value = str(key["value"])
+    #         if checkInt(value): # num values - without display_type - should be added as levels
+    #             continue
+    #     else:
+    #         continue
+
+    #     input1.send_keys(Keys.CONTROL, "a")
+    #     if datalen == 1:
+    #         input1.send_keys("Property")
+    #     else:
+    #         input1.send_keys(trait_type)
+    #     input2.send_keys(Keys.CONTROL, "a")
+    #     input2.send_keys(value)
+    #     d.find_element_by_xpath('//button[text()="Add more"]').send_keys(Keys.ENTER)
+
+    # time.sleep(1)
+    # d.find_element_by_xpath('//button[text()="Save"]').send_keys(Keys.ENTER)
+    # time.sleep(1)
+
+    # # LEVELS (progress bar)
+    # d.find_element_by_xpath('(//div[@class="AssetFormTraitSection--side"])[2]/button').send_keys(Keys.ENTER)
+    # for key in metadataMap:
+    #     input1 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[1]/div/div/input')
+    #     input2 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[2]/div/div/input')
+    #     input3 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]//td[3]/div/div/input')
+
+    #     datalen = len(key)
+    #     if datalen != 2:
+    #         continue
+
+    #     #display_type = None
+    #     trait_type = None
+    #     value = None
+
+    #     # if "display_type" in key:
+    #     #     display_type = str(key["display_type"])
+    #     #     if display_type == "number": # display time 'number' is for numerical values, not progress bars
+    #     #         continue
+    #     # else:
+    #     #     continue
+
+    #     if "trait_type" in key:
+    #         trait_type = str(key["trait_type"])
+    #     else:
+    #         continue
+    #     if "value" in key:
+    #         value = str(key["value"])
+    #         if not checkInt(value):
+    #             continue
+    #     else:
+    #         continue
+
+    #     max = value
+    #     if trait_type.lower() == "rank":
+    #         max = str( 5 )
+
+    #     input1.send_keys(Keys.CONTROL,"a")
+    #     input1.send_keys(trait_type)
+    #     input3.send_keys(Keys.CONTROL,"a")
+    #     input3.send_keys(max)
+    #     input2.send_keys(Keys.CONTROL,"a")
+    #     input2.send_keys(value)
+    #     d.find_element_by_xpath('//button[text()="Add more"]').send_keys(Keys.ENTER)
+
+    # d.find_element_by_xpath('//button[text()="Save"]').send_keys(Keys.ENTER)
+    # time.sleep(1)
+    
+    # # STATS (shows as number)
+    # d.find_element_by_xpath('(//div[@class="AssetFormTraitSection--side"])[3]/button').send_keys(Keys.ENTER)
+    # for key in metadataMap:
+    #     input1 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[1]/div/div/input')
+    #     input2 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[2]/div/div/input')
+    #     input3 = d.find_element_by_xpath('//tbody[@class="AssetTraitsForm--body"]/tr[last()]/td[3]/div/div/input')
+
+    #     datalen = len(key)
+    #     if datalen != 2:
+    #         continue
+
+    #     trait_type = None
+    #     value = None
+
+    #     if "trait_type" in key:
+    #         trait_type = str(key["trait_type"])
+    #     if "value" in key:
+    #         value = str(key["value"])
+    #         if not checkInt(value):
+    #             continue
+    #     else:
+    #         continue
+
+    #     max = value
+    #     if trait_type.lower() == "rating":
+    #         max = str( 2000 )
+
+    #     input1.send_keys(Keys.CONTROL,"a")
+    #     input1.send_keys(trait_type)
+    #     input3.send_keys(Keys.CONTROL,"a")
+    #     input3.send_keys(value)
+    #     input2.send_keys(Keys.CONTROL,"a")
+    #     input2.send_keys(value)
+    #     d.find_element_by_xpath('//button[text()="Add more"]').send_keys(Keys.ENTER)
+
+    # d.find_element_by_xpath('//button[text()="Save"]').send_keys(Keys.ENTER)
+    # time.sleep(1)
 
 
 def upload(d, nft: NFT):
     d.switch_to.window(driver.window_handles[-1])
-    time.sleep(3)
-    d.find_element_by_id("media").send_keys(nft.file)
+    time.sleep(2)
+    imageupload = d.find_element_by_id("media")
+    if imageupload:
+        imageupload.send_keys(nft.file)
+        print("success image")
+    else:
+        imageupload = d.find_element_by_name("media")
+        if imageupload:
+            imageupload.send_keys(nft.file)
+            print("success image2")
+
     d.find_element_by_id("name").send_keys(nft.name)
     d.find_element_by_id("description").send_keys(nft.description)
 
@@ -82,29 +332,41 @@ def upload(d, nft: NFT):
     fillMetadata(d, nft.metadata)
 
     time.sleep(2)
-    d.find_element_by_xpath('//button[text()="Create"]').click()
+    d.find_element_by_xpath('//button[text()="Create"]').send_keys(Keys.ENTER)
     time.sleep(5)
-    d.execute_script('''location.href="https://opensea.io/collection/guy-with-a-smirk/assets/create"''')
+    d.execute_script("location.href=\"" + CREATE_URL + "\"")
 
 
 if __name__ == '__main__':
     # setup metamask
     opt = webdriver.ChromeOptions()
+    exists = os.path.isfile(EXTENSION_PATH)
+    if exists:
+        print(">> exists")
+    else:
+        print(">>> NOT EXIST!!")
     opt.add_extension(EXTENSION_PATH)
     driver = webdriver.Chrome(executable_path=CHROME_DRIVER_PATH, chrome_options=opt)
     setup_metamask_wallet(driver)
     time.sleep(2)
     move_to_opensea(driver)
     signin_to_opensea(driver)
-    driver.execute_script('''window.open("https://opensea.io/collection/guy-with-a-smirk/assets/create","_blank")''')
+    driver.execute_script("window.open(\"" + CREATE_URL + "\",\"_blank\")")
     driver.switch_to.window(driver.window_handles[-1])
-    time.sleep(7)  # todo- need to manually click on sign button for now
-    data = JSON(os.getcwd() + "/data/metadata.json").readFromFile()
-    for key in data:
-        name = "#"+key
-        description = name + " from DemonQueenNFT"
-        file = key+".png"
-        metadata = data[key]
-        upload(driver, NFT(name, description, metadata, os.getcwd() + "/data/" + file))
+    time.sleep(3)  # todo- need to manually click on sign button for now
+
+    first_id = 1
+    create_count = 1
+
+    for i in range(first_id, (first_id + create_count)):
+        path = os.getcwd() + "/data/metadata/" + str(i) + ".json"
+        data = JSON(path).readFromFile()
+        name = data["name"]
+        description = data["description"]
+        file = os.getcwd() + "/data/images/" + str(i) + ".png"
+        metadata = data["attributes"]
+        upload(driver, NFT(name, description, metadata, file))
+        time.sleep(2)
+
     print("DONE!!")
 
