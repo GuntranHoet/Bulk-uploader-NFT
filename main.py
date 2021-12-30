@@ -39,7 +39,6 @@ def setup_metamask_wallet(d):
 
     inputs = d.find_elements_by_xpath("//input")
     inputs[0].send_keys(RECOVERY_CODE)
-    time.sleep(1)
     inputs[1].send_keys(PASSWORD)
     inputs[2].send_keys(PASSWORD)
     time.sleep(1)
@@ -67,7 +66,7 @@ def signin_to_opensea(d):
     d.find_element_by_xpath('//button[text()="Next"]').click()
     time.sleep(1)
     d.find_element_by_xpath('//button[text()="Connect"]').click()
-    time.sleep(2)
+    time.sleep(3)
     d.find_element_by_xpath('//button[text()="Sign"]').click()
 
 
@@ -154,27 +153,23 @@ def fillMetadata(d: webdriver.Chrome, metadataMap: dict):
 
 def upload(d, nft: NFT):
     d.switch_to.window(driver.window_handles[-1])
-    time.sleep(2)
-    imageupload = d.find_element_by_id("media")
-    if imageupload:
-        imageupload.send_keys(nft.file)
-        print("success image")
-    else:
-        imageupload = d.find_element_by_name("media")
-        if imageupload:
-            imageupload.send_keys(nft.file)
-            print("success image2")
-
+    time.sleep(1)
+    d.find_element_by_id("media").send_keys(nft.file)
+    time.sleep(1)
     d.find_element_by_id("name").send_keys(nft.name)
     d.find_element_by_id("description").send_keys(nft.description)
 
-    time.sleep(3)
+    d.find_element_by_id("external_link").send_keys(nft.external_url)
+    d.find_element_by_id("unlockable-content-toggle").send_keys(Keys.ENTER)
+    d.find_element_by_xpath('//div[@class="AssetForm--unlockable-content"]/textarea').send_keys(nft.unlockable_content)
+
+    time.sleep(1)
 
     fillMetadata(d, nft.metadata)
 
-    time.sleep(2)
+    time.sleep(1)
     d.find_element_by_xpath('//button[text()="Create"]').send_keys(Keys.ENTER)
-    time.sleep(5)
+    time.sleep(4)
     d.execute_script("location.href=\"" + CREATE_URL + "\"")
 
 
@@ -196,18 +191,23 @@ if __name__ == '__main__':
     driver.switch_to.window(driver.window_handles[-1])
     time.sleep(3)  # todo- need to manually click on sign button for now
 
-    first_id = 1
-    create_count = 1
+#1--299
+#1405-1437
+    first_id = 300
+    last_id = 500-1
 
-    for i in range(first_id, (first_id + create_count)):
+    for i in range(first_id, (last_id+1)):
         path = os.getcwd() + "/data/metadata/" + str(i) + ".json"
         data = JSON(path).readFromFile()
         name = data["name"]
         description = data["description"]
         file = os.getcwd() + "/data/images/" + str(i) + ".png"
         metadata = data["attributes"]
-        upload(driver, NFT(name, description, metadata, file))
-        time.sleep(2)
+        unlockable_content = data["unlockable_content"]
+        ext_url = data["external_url"]
+        upload(driver, NFT(name, description, unlockable_content, ext_url, metadata, file))
+        print("> Successfully uploaded", name)
+        time.sleep(1)
 
     print("DONE!!")
 
